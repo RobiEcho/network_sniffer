@@ -50,4 +50,11 @@ int thread_pool_add_task(thread_pool_t *pool, void *(*function)(void *), void *a
  */
 int thread_pool_destroy(thread_pool_t *pool);
 
+/**
+ * @brief 获取线程池当前等待的任务数量
+ * @param pool 线程池指针
+ * @return 成功返回任务数量，失败返回-1
+ */
+int thread_pool_get_queue_size(thread_pool_t *pool);
+
 #endif // THREAD_POOL_H
