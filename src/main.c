@@ -7,6 +7,8 @@
 #include "packet_parser.h" 
 #include "packet_logger.h"
 #include "thread_pool.h"
+#include "chain_of_responsibility.h"
+#include "packet_handlers.h"
 
 volatile int running = 1;                 // 运行标志
 pcap_t *handle = NULL;                    // 抓包句柄
@@ -14,6 +16,7 @@ TrafficAnalyzer *traffic_analyzer = NULL; // 流量分析结构体
 char local_ip[INET_ADDRSTRLEN] = {0};     // 设备IP
 thread_pool_t *thread_pool = NULL;        // 线程池
 pthread_mutex_t analyzer_mutex = PTHREAD_MUTEX_INITIALIZER; // 流量分析器互斥锁
+handler_node_t *packet_handler_chain = NULL; // 数据包处理链
 
 // 信号处理函数
 void handle_signal(int signal) {
@@ -45,6 +48,13 @@ void cleanup_resources() {
         traffic_analyzer = NULL;
     }
     
+    // 销毁数据包处理链
+    if (packet_handler_chain != NULL) {
+        printf("销毁数据包处理链...\n");
+        destroy_packet_handlers(packet_handler_chain);
+        packet_handler_chain = NULL;
+    }
+    
     // 关闭pcap句柄
     if (handle != NULL) {
         pcap_close(handle);
@@ -55,24 +65,16 @@ void cleanup_resources() {
     pthread_mutex_destroy(&analyzer_mutex);
 }
 
-// 数据包解析线程
-void *packet_parsing_callback(void *arg) {
+// 数据包处理线程回调函数（使用责任链模式）
+void *packet_chain_callback(void *arg) {
     PacketInfo *packet_info = (PacketInfo *)arg;
     if (!packet_info) return NULL;
     
-    Packetdelivery* data = parse_packet(packet_info);  // 解析数据包
-    if (!data) {
-        free_packet_info(packet_info);   // 释放数据包内存
-        return NULL;
-    }
-
-    // 使用互斥锁保护流量统计操作
-    pthread_mutex_lock(&analyzer_mutex);
-    statistic_packet(traffic_analyzer, data->src_ip, data->dst_ip, local_ip, data->total_size);
-    pthread_mutex_unlock(&analyzer_mutex);
-
-    free_packet_delivery(data);      // 释放解析结果
-    free_packet_info(packet_info);   // 释放数据包内存
+    // 使用责任链处理数据包
+    handle_packet(packet_handler_chain, packet_info, local_ip);
+    
+    // 释放数据包信息
+    free_packet_info(packet_info);
     return NULL;
 }
 
@@ -91,8 +93,8 @@ void packet_handler(u_char *user, const struct pcap_pkthdr *h, const u_char *byt
         return;
     }
     
-    // 将任务添加到线程池
-    if (thread_pool_add_task(thread_pool, packet_parsing_callback, packet_info) != 0) {
+    // 将任务添加到线程池，使用责任链模式的回调函数
+    if (thread_pool_add_task(thread_pool, packet_chain_callback, packet_info) != 0) {
         fprintf(stderr, "添加任务到线程池失败\n");
         free_packet_info(packet_info);
     }
@@ -123,6 +125,18 @@ int main() {
         fprintf(stderr, "初始化互斥锁失败\n");
         return 1;
     }
+    
+    // 初始化数据包处理链
+    packet_handler_chain = init_packet_handlers();
+    if (packet_handler_chain == NULL) {
+        fprintf(stderr, "初始化数据包处理链失败\n");
+        return 1;
+    }
+    printf("初始化数据包处理链成功\n");
+    
+    // 打印处理链结构
+    printf("数据包处理链结构:\n");
+    print_handler_tree(packet_handler_chain, 0);
     
     // 创建线程池，使用CPU核心数的两倍作为线程数
     int thread_count = 4; // 默认值
