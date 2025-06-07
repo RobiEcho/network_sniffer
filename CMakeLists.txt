@@ -12,13 +12,19 @@ endif()
 
 include_directories(include)
 
-# 源文件
-file(GLOB SOURCES "src/*")
-
-# 构建共享库
+# 构建线程池共享库
 add_library(thread_pool SHARED src/thread_pool.c)
 target_include_directories(thread_pool PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
+# 源文件(排除thread_pool.c)
+set(SOURCES 
+    src/main.c
+    src/packet_logger.c
+    src/packet_parser.c
+)
+
+# 构建可执行文件
 add_executable(network_sniffer ${SOURCES})
 
-target_link_libraries(network_sniffer ${PCAP_LIBRARY} pthread)
+# 链接依赖库
+target_link_libraries(network_sniffer ${PCAP_LIBRARY} pthread thread_pool)
