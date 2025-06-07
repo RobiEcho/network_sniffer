@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <locale.h>
 
 // 初始化流量分析器
 TrafficAnalyzer* init_traffic_analyzer() {
@@ -88,6 +89,9 @@ TrafficStatNode* find_or_create_stat_node(TrafficAnalyzer *analyzer, const char 
 int write_traffic_stats_to_file(TrafficAnalyzer *analyzer) {
     if (!analyzer) return 0;
 
+    // 设置本地化，以支持数字格式化
+    setlocale(LC_NUMERIC, "");
+    
     // 生成文件名
     time_t now = time(NULL);
     struct tm *tm_info = localtime(&now);
@@ -117,7 +121,8 @@ int write_traffic_stats_to_file(TrafficAnalyzer *analyzer) {
 
     // 写入每条统计记录（新格式）
     while (current) {
-        fprintf(file, "| %-17s | %-16s | %'12lu字节 | %'12lu字节 | %'12lu字节 |\n",
+        // 修改格式化字符串，使用标准的%lu，避免使用不兼容的%'lu
+        fprintf(file, "| %-17s | %-16s | %12lu字节 | %12lu字节 | %12lu字节 |\n",
                 current->stat.local_ip,
                 current->stat.remote_ip,
                 current->stat.outgoing_bytes,
@@ -140,7 +145,6 @@ int write_traffic_stats_to_file(TrafficAnalyzer *analyzer) {
 
     // 关闭文件
     fclose(file);
-    // printf("一共记录了 %d 个ip与本机进行数据交换\n", count);
     printf("流量统计报告已生成: %s\n",filepath);
 
     return count;
