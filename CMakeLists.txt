@@ -16,7 +16,7 @@ include_directories(include)
 # 源文件
 set(SOURCES 
     src/main.c
-    src/packet_logger.c
+    src/traffic_analyzer.c
     src/packet_parser.c
     src/packet_handlers.c
     src/chain_of_responsibility.c

@@ -6,7 +6,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include "packet_parser.h" 
-#include "packet_logger.h"
+#include "traffic_analyzer.h"
 #include "thread_pool.h"
 #include "chain_of_responsibility.h"
 #include "packet_handlers.h"

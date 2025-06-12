@@ -7,9 +7,9 @@
 
 // 以太网头部结构
 typedef struct {
-    uint8_t dest_mac[ETH_ALEN];
-    uint8_t src_mac[ETH_ALEN];
-    uint16_t ether_type;
+    uint8_t dest_mac[ETH_ALEN];  // 目标MAC地址
+    uint8_t src_mac[ETH_ALEN];   // 源MAC地址
+    uint16_t ether_type;         // 以太网类型
 } MyEthHeader;
 
 // IP头部结构
@@ -48,24 +48,25 @@ typedef struct {
     u_int16_t sum;   /* UDP校验和 */
 } MyUdpHeader;
 
-// 数据包信息结构
+/**
+ * @brief 增强的数据包信息结构，包含原始数据和解析后的信息
+ * 整合了原来的PacketInfo和Packetdelivery结构体，减少内存分配
+ */
 typedef struct {
-    const uint8_t *data;
-    size_t length;
+    const uint8_t *data;               // 原始数据包内容
+    size_t length;                     // 数据包长度
+    char src_ip[INET_ADDRSTRLEN];      // 源IP地址 (解析后)
+    char dst_ip[INET_ADDRSTRLEN];      // 目的IP地址 (解析后)
+    int total_size;                    // 数据包总大小 (字节)
+    int is_parsed;                     // 是否已经解析
 } PacketInfo;
-
-// 解析得到的源ip和目的ip，以及流量大小
-typedef struct {
-    char src_ip[INET_ADDRSTRLEN];
-    char dst_ip[INET_ADDRSTRLEN];
-    int total_size;
-} Packetdelivery;
 
 /**
  * @brief 创建一个数据包信息结构体，并复制数据内容
  * @param data   指向原始数据包内容的指针
  * @param length 数据包内容的长度（字节数）
  * @return PacketInfo* 指向新分配并初始化的 PacketInfo 结构体指针，需用 free_packet_info 释放
+ * @note 初始化后的结构体中is_parsed为0，表示尚未解析
  */
 PacketInfo* create_packet_info(const uint8_t *data, size_t length);
 
@@ -76,23 +77,19 @@ PacketInfo* create_packet_info(const uint8_t *data, size_t length);
 void free_packet_info(PacketInfo *info);
 
 /**
- * @brief 解析并记录数据包传递参数
+ * @brief 解析数据包，提取源IP、目的IP和数据包大小
  * @param info 指向待解析的数据包信息结构体
- * @return Packetdelivery* 指向新分配并初始化的 Packetdelivery 结构体指针  
+ * @return int 成功返回1，失败返回0
+ * @note 解析结果直接存储在info结构体中，成功解析后is_parsed设为1
  */
-Packetdelivery* parse_packet(PacketInfo *info);
-
-/**
- * @brief 释放解析数据包得到的参数结构体
- * @param data 需要释放的 Packetdelivery 结构体指针
- */
-void free_packet_delivery(Packetdelivery *data);
+int parse_packet(PacketInfo *info);
 
 /**
  * @brief 获取本机IP地址
  * @param local_ip 存储本机IP的缓冲区
- * @param size 缓冲区大小
+ * @param size 缓冲区大小，应至少为INET_ADDRSTRLEN
  * @return int 成功返回1，失败返回0
+ * @note 此函数会尝试获取第一个非回环(非127.0.0.1)的IPv4地址
  */
 int get_local_ip(char *local_ip, size_t size);
 
