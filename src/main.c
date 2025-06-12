@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdint.h>
 #include <signal.h>
 #include <pthread.h>
 #include <pcap.h>
@@ -18,9 +19,8 @@ thread_pool_t *thread_pool = NULL;        // 线程池
 pthread_mutex_t analyzer_mutex = PTHREAD_MUTEX_INITIALIZER; // 流量分析器互斥锁
 handler_node_t *packet_handler_chain = NULL; // 数据包处理链
 
-// 信号处理函数
+// 终止信号处理
 void handle_signal(int signal) {
-    printf("\n收到中断信号，正在停止抓包...\n");
     running = 0;
     pcap_breakloop(handle);
 }
@@ -35,22 +35,13 @@ void cleanup_resources() {
             // 简单等待一段时间让任务处理完成
             sleep(1);
         }
-        
-        printf("销毁线程池...\n");
+
         thread_pool_destroy(thread_pool);
         thread_pool = NULL;
     }
-    
-    // 记录流量统计并释放资源
-    if (traffic_analyzer != NULL) {
-        printf("生成流量统计报告...\n");
-        generate_logs_and_free(traffic_analyzer);
-        traffic_analyzer = NULL;
-    }
-    
+
     // 销毁数据包处理链
     if (packet_handler_chain != NULL) {
-        printf("销毁数据包处理链...\n");
         destroy_packet_handlers(packet_handler_chain);
         packet_handler_chain = NULL;
     }
@@ -63,6 +54,14 @@ void cleanup_resources() {
     
     // 销毁互斥锁
     pthread_mutex_destroy(&analyzer_mutex);
+
+    // 记录流量统计并释放资源
+    if (traffic_analyzer != NULL) {
+        
+        generate_logs_and_free(traffic_analyzer);
+        traffic_analyzer = NULL;
+    }
+    printf("流量统计报告已生成\n");
 }
 
 // 数据包处理线程回调函数（使用责任链模式）
@@ -89,7 +88,7 @@ void packet_handler(u_char *user, const struct pcap_pkthdr *h, const u_char *byt
     // 申请内存保存数据包，并传递给线程来处理
     PacketInfo *packet_info = create_packet_info(bytes, h->caplen);
     if (!packet_info) {
-        fprintf(stderr, "创建数据包信息结构体失败\n");
+        fprintf(stderr, "数据包信息记录失败\n");
         return;
     }
     
@@ -101,10 +100,10 @@ void packet_handler(u_char *user, const struct pcap_pkthdr *h, const u_char *byt
 }
 
 int main() {
-    // 注册信号处理函数
+    // 注册终止信号处理函数
     signal(SIGINT, handle_signal);
     
-    // 注册退出清理函数
+    // 注册退出清理函数：当mian函数返回或程序通过exit()正常退出时调用
     atexit(cleanup_resources);
     
     // 获取本地IP
@@ -112,11 +111,10 @@ int main() {
         fprintf(stderr, "获取本地IP失败\n");
         return 1;
     }
-    printf("本机IP: %s\n", local_ip);
 
     // 初始化流量统计器
     if (init_packet_analyzer(&traffic_analyzer) != 0) {
-        fprintf(stderr, "初始化流量分析器失败\n");
+        fprintf(stderr, "初始化流量统计器失败\n");
         return 1;
     }
     
@@ -132,32 +130,30 @@ int main() {
         fprintf(stderr, "初始化数据包处理链失败\n");
         return 1;
     }
-    printf("初始化数据包处理链成功\n");
     
     // 打印处理链结构
-    printf("数据包处理链结构:\n");
-    print_handler_tree(packet_handler_chain, 0);
+    // print_handler_tree(packet_handler_chain, 0);
     
-    // 创建线程池，使用CPU核心数的两倍作为线程数
+    // 创建线程池，使用CPU核心数作为线程数
     int thread_count = 4; // 默认值
     #ifdef _SC_NPROCESSORS_ONLN
         int cpu_cores = sysconf(_SC_NPROCESSORS_ONLN);
         if (cpu_cores > 0) {
-            thread_count = cpu_cores * 2;
+            thread_count = cpu_cores;
         }
     #endif
     
+    // 创建线程池
     thread_pool = thread_pool_create(thread_count);
     if (thread_pool == NULL) {
         fprintf(stderr, "创建线程池失败\n");
         return 1;
     }
-    printf("创建线程池成功，线程数: %d\n", thread_count);
 
     char errbuf[PCAP_ERRBUF_SIZE];      // 错误缓冲区
     pcap_if_t *devs;                    // 网卡设备列表
     struct bpf_program fp;              // 过滤器
-    char filter_exp[] = "ip"; 
+    char filter_exp[] = "ip";           // 
     
     // 获取所有网卡设备
     if (pcap_findalldevs(&devs, errbuf) == -1) {
@@ -165,19 +161,8 @@ int main() {
         return 1;
     }
     
-    // 检查是否有可用的网卡设备
-    if (devs == NULL) {
-        fprintf(stderr, "未找到可用的网卡设备\n");
-        return 1;
-    }
-    
     // 打开网卡设备
     handle = pcap_open_live(devs->name, BUFSIZ, 1, 1000, errbuf);
-    if (handle == NULL) {
-        fprintf(stderr, "无法打开网卡设备: %s\n", errbuf);
-        pcap_freealldevs(devs);
-        return 1;
-    }
     
     // 设置过滤器
     if (pcap_compile(handle, &fp, filter_exp, 0, PCAP_NETMASK_UNKNOWN) == -1) {

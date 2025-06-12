@@ -70,34 +70,6 @@ int parse_handler(void *req, void *ctx) {
     return 0;
 }
 
-// IP过滤处理器 - 根据指定IP进行过滤
-int filter_handler(void *req, void *ctx) {
-    packet_request_t *request = (packet_request_t *)req;
-    filter_context_t *filter_ctx = (filter_context_t *)ctx;
-    
-    if (!request || !request->delivery_info || !filter_ctx) {
-        return -1;
-    }
-    
-    // 设置当前处理类型
-    request->handler_type = HANDLER_TYPE_FILTER;
-    
-    // 根据过滤类型进行过滤
-    if (filter_ctx->filter_type == 1) {
-        // 过滤源IP
-        if (strcmp(request->delivery_info->src_ip, filter_ctx->filter_ip) != 0) {
-            return 1; // 不匹配，返回1表示跳过后续处理
-        }
-    } else if (filter_ctx->filter_type == 2) {
-        // 过滤目的IP
-        if (strcmp(request->delivery_info->dst_ip, filter_ctx->filter_ip) != 0) {
-            return 1; // 不匹配，返回1表示跳过后续处理
-        }
-    }
-    
-    return 0; // 匹配，继续处理
-}
-
 // 统计处理器 - 统计流量
 int statistics_handler(void *req, void *ctx) {
     packet_request_t *request = (packet_request_t *)req;
@@ -138,10 +110,10 @@ int logger_handler(void *req, void *ctx) {
     request->handler_type = HANDLER_TYPE_LOGGER;
     
     // 输出数据包信息
-    printf("数据包: %s -> %s, 大小: %d字节\n",
-           request->delivery_info->src_ip,
-           request->delivery_info->dst_ip,
-           request->delivery_info->total_size);
+    // printf("数据包: %s -> %s, 大小: %d字节\n",
+    //        request->delivery_info->src_ip,
+    //        request->delivery_info->dst_ip,
+    //        request->delivery_info->total_size);
     
     return 0;
 }
@@ -185,24 +157,6 @@ handler_node_t *init_packet_handlers() {
         destroy_handler(log_handler);
         destroy_handler(root);
         return NULL;
-    }
-    
-    // 创建并添加一个过滤处理器示例（过滤特定IP地址）
-    filter_context_t *filter_ctx = (filter_context_t *)malloc(sizeof(filter_context_t));
-    if (filter_ctx) {
-        // 设置过滤为源IP 8.8.8.8
-        strncpy(filter_ctx->filter_ip, "8.8.8.8", INET_ADDRSTRLEN - 1);
-        filter_ctx->filter_ip[INET_ADDRSTRLEN - 1] = '\0';
-        filter_ctx->filter_type = 1; // 过滤源IP
-        
-        handler_node_t *filter_handler_node = create_handler("IP过滤处理器", filter_handler, filter_ctx);
-        if (filter_handler_node) {
-            // 添加为日志处理器的子节点
-            if (add_child_handler(log_handler, filter_handler_node) != 0) {
-                fprintf(stderr, "添加IP过滤处理器失败\n");
-                destroy_handler(filter_handler_node);
-            }
-        }
     }
     
     return root;
