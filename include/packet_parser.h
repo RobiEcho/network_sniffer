@@ -5,6 +5,12 @@
 
 #define ETH_ALEN 6
 
+// 以太网协议类型定义
+#define ETH_P_IP    0x0800  // IPv4协议
+#define ETH_P_ARP   0x0806  // ARP协议
+#define ETH_P_IPV6  0x86DD  // IPv6协议
+#define ETH_P_8021Q 0x8100  // 802.1Q VLAN标签
+
 // 以太网头部结构
 typedef struct {
     uint8_t dest_mac[ETH_ALEN];  // 目标MAC地址
@@ -27,7 +33,7 @@ typedef struct __attribute__((packed)) {
     struct in_addr dst_addr; // 目的IP地址
 } MyIpHeader;
 
-/* TCP 头 */
+// TCP 头 
 typedef struct {
     unsigned short sport;    // 源端口号
     unsigned short dport;    // 目的端口号
@@ -40,17 +46,16 @@ typedef struct {
     unsigned short urg;      // 紧急指针
 } MyTcpHeader;
 
-/* UDP Header */
+// UDP 头
 typedef struct {
-    u_int16_t sport; /* 源端口 */
-    u_int16_t dport; /* 目的端口 */
-    u_int16_t ulen;  /* UDP数据报长度 */
-    u_int16_t sum;   /* UDP校验和 */
+    u_int16_t sport; // 源端口
+    u_int16_t dport; // 目的端口
+    u_int16_t ulen;  // UDP数据报长度
+    u_int16_t sum;   // UDP校验和
 } MyUdpHeader;
 
 /**
  * @brief 增强的数据包信息结构，包含原始数据和解析后的信息
- * 整合了原来的PacketInfo和Packetdelivery结构体，减少内存分配
  */
 typedef struct {
     const uint8_t *data;               // 原始数据包内容

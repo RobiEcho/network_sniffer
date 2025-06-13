@@ -42,6 +42,7 @@ handler_node_t *create_handler(const char *name, handler_function handle, void *
  * @brief 添加子处理器
  * 
  * 如果父节点已有子节点，则将新子节点添加到子节点链表末尾
+ * 在垂直方向添加节点（父子关系）
  */
 int add_child_handler(handler_node_t *parent, handler_node_t *child) {
     if (!parent || !child) {
@@ -69,6 +70,7 @@ int add_child_handler(handler_node_t *parent, handler_node_t *child) {
  * @brief 添加兄弟处理器
  * 
  * 将新兄弟节点添加到兄弟节点链表末尾
+ * 在水平方向添加节点（兄弟关系）
  */
 int add_sibling_handler(handler_node_t *handler, handler_node_t *sibling) {
     if (!handler || !sibling) {
@@ -117,7 +119,7 @@ int process_request(handler_node_t *handler, void *request, bool (*should_contin
         }
     }
     
-    // 如果有兄弟节点，递归处理兄弟节点（广度优先）
+    // 如果有兄弟节点，递归处理兄弟节点（这里不选择广度优先）
     if (handler->next_sibling) {
         result = process_request(handler->next_sibling, request, should_continue);
     }

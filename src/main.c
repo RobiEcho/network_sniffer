@@ -99,13 +99,8 @@ void packet_handler(u_char *user, const struct pcap_pkthdr *h, const u_char *byt
     }
 }
 
-int main() {
-    // 注册终止信号处理函数
-    signal(SIGINT, handle_signal);
-    
-    // 注册退出清理函数：当mian函数返回或程序通过exit()正常退出时调用
-    atexit(cleanup_resources);
-    
+// 初始化基础资源函数
+int init_resources() {
     // 获取本地IP
     if (!get_local_ip(local_ip, INET_ADDRSTRLEN)) {
         fprintf(stderr, "获取本地IP失败\n");
@@ -131,9 +126,6 @@ int main() {
         return 1;
     }
     
-    // 打印处理链结构
-    // print_handler_tree(packet_handler_chain, 0);
-    
     // 创建线程池，使用CPU核心数作为线程数
     int thread_count = 4; // 默认值
     #ifdef _SC_NPROCESSORS_ONLN
@@ -144,16 +136,21 @@ int main() {
     #endif
     
     // 创建线程池
-    thread_pool = thread_pool_create(thread_count);
+    thread_pool = thread_pool_create(thread_count, 1024); // 设置任务队列大小为1024
     if (thread_pool == NULL) {
         fprintf(stderr, "创建线程池失败\n");
         return 1;
     }
 
+    return 0;
+}
+
+// 初始化网络抓包函数
+int init_packet_capture() {
     char errbuf[PCAP_ERRBUF_SIZE];      // 错误缓冲区
     pcap_if_t *devs;                    // 网卡设备列表
     struct bpf_program fp;              // 过滤器
-    char filter_exp[] = "ip";           // 
+    char filter_exp[] = "ip";           // 过滤表达式
     
     // 获取所有网卡设备
     if (pcap_findalldevs(&devs, errbuf) == -1) {
@@ -163,6 +160,11 @@ int main() {
     
     // 打开网卡设备
     handle = pcap_open_live(devs->name, BUFSIZ, 1, 1000, errbuf);
+    if (!handle) {
+        fprintf(stderr, "无法打开网卡设备: %s\n", errbuf);
+        pcap_freealldevs(devs);
+        return 1;
+    }
     
     // 设置过滤器
     if (pcap_compile(handle, &fp, filter_exp, 0, PCAP_NETMASK_UNKNOWN) == -1) {
@@ -180,6 +182,26 @@ int main() {
     
     pcap_freecode(&fp);
     pcap_freealldevs(devs);
+    
+    return 0;
+}
+
+int main() {
+    // 注册终止信号处理函数
+    signal(SIGINT, handle_signal);
+    
+    // 注册退出清理函数：当mian函数返回或程序通过exit()正常退出时调用
+    atexit(cleanup_resources);
+    
+    // 初始化所有资源
+    if (init_resources() != 0) {
+        return 1;
+    }
+    
+    // 初始化网络抓包
+    if (init_packet_capture() != 0) {
+        return 1;
+    }
 
     // 开始抓包
     printf("开始抓包...(按Ctrl+C停止)\n");

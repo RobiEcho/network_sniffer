@@ -83,7 +83,7 @@ int parse_packet(PacketInfo *info) {
     uint16_t ether_type = ntohs(eth_header->ether_type);
     
     // 只处理IPv4数据包
-    if (ether_type == 0x0800) {
+    if (ether_type == ETH_P_IP) {
         // 解析IP头部
         const MyIpHeader *ip_header = (const MyIpHeader*)(info->data + sizeof(MyEthHeader));
         
@@ -101,19 +101,19 @@ int parse_packet(PacketInfo *info) {
         info->total_size = ntohs(ip_header->total_length);
         info->is_parsed = 1; // 标记为已解析
         
-        return 1; // 解析成功
+        return 1;
     }
-    else if (ether_type == 0x0806) {
-        fprintf(stderr, "不支持的协议: ARP\n");
+    else if (ether_type == ETH_P_ARP) {
+        fprintf(stderr, "目前不支持解析协议: ARP\n");
     }
-    else if (ether_type == 0x86DD) {
-        fprintf(stderr, "不支持的协议: IPv6\n");
+    else if (ether_type == ETH_P_IPV6) {
+        fprintf(stderr, "目前不支持解析协议: IPv6\n");
     } 
     else {
-        fprintf(stderr, "不支持的协议: 0x%04x\n", ether_type);
+        fprintf(stderr, "目前不支持解析协议: 0x%04x\n", ether_type);
     }
     
-    return 0; // 不支持的协议
+    return 0;
 }
 
 /**
