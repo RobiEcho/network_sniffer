@@ -5,8 +5,11 @@
 #include "packet_parser.h"
 
 // 处理器类型常量
-#define HANDLER_TYPE_PARSE     1  // 解析处理器
-#define HANDLER_TYPE_STAT      2  // 统计处理器
+#define HANDLER_TYPE_ETH_DECODE  1  // 以太网解码器
+#define HANDLER_TYPE_IP_DECODE   2  // IP解码器
+#define HANDLER_TYPE_TCP_DECODE  3  // TCP解码器
+#define HANDLER_TYPE_UDP_DECODE  4  // UDP解码器
+#define HANDLER_TYPE_STAT        5  // 统计处理器
 
 /**
  * @brief 数据包请求结构体，用于在责任链中传递数据包信息

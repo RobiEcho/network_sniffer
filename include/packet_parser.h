@@ -64,6 +64,11 @@ typedef struct {
     char dst_ip[INET_ADDRSTRLEN];      // 目的IP地址 (解析后)
     int total_size;                    // 数据包总大小 (字节)
     int is_parsed;                     // 是否已经解析
+    int protocol;                      // IP协议类型 (TCP/UDP等)
+    const MyEthHeader *eth_header;     // 以太网头部指针
+    const MyIpHeader *ip_header;       // IP头部指针
+    const MyTcpHeader *tcp_header;     // TCP头部指针（如果是TCP）
+    const MyUdpHeader *udp_header;     // UDP头部指针（如果是UDP）
 } PacketInfo;
 
 /**
@@ -97,5 +102,33 @@ int parse_packet(PacketInfo *info);
  * @note 此函数会尝试获取第一个非回环(非127.0.0.1)的IPv4地址
  */
 int get_local_ip(char *local_ip, size_t size);
+
+/**
+ * @brief 以太网帧解码器
+ * @param info 数据包信息
+ * @return int 成功返回1，失败返回0
+ */
+int decode_ethernet(PacketInfo *info);
+
+/**
+ * @brief IP包解码器
+ * @param info 数据包信息
+ * @return int 成功返回1，失败返回0
+ */
+int decode_ip(PacketInfo *info);
+
+/**
+ * @brief TCP段解码器
+ * @param info 数据包信息
+ * @return int 成功返回1，失败返回0
+ */
+int decode_tcp(PacketInfo *info);
+
+/**
+ * @brief UDP段解码器
+ * @param info 数据包信息
+ * @return int 成功返回1，失败返回0
+ */
+int decode_udp(PacketInfo *info);
 
 #endif // PACKET_PARSER_H
