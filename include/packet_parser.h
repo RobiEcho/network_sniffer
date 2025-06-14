@@ -2,6 +2,9 @@
 #define PACKET_PARSER_H
 
 #include <pcap.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <stdio.h>
 
 #define ETH_ALEN 6
 
@@ -10,6 +13,13 @@
 #define ETH_P_ARP   0x0806  // ARP协议
 #define ETH_P_IPV6  0x86DD  // IPv6协议
 #define ETH_P_8021Q 0x8100  // 802.1Q VLAN标签
+
+// 数据包状态标志位定义
+#define PKT_FLAG_PARSED       0x01  // 是否已解析
+#define PKT_FLAG_ETH_PARSED   0x02  // 以太网层是否已解析
+#define PKT_FLAG_IP_PARSED    0x04  // IP层是否已解析
+#define PKT_FLAG_TCP_PARSED   0x08  // TCP层是否已解析
+#define PKT_FLAG_UDP_PARSED   0x10  // UDP层是否已解析
 
 // 以太网头部结构
 typedef struct {
@@ -55,78 +65,111 @@ typedef struct {
 } MyUdpHeader;
 
 /**
- * @brief 数据包信息结构，包含原始数据和解析后的信息
+ * @brief 原始数据包数据结构，负责存储原始数据
  */
 typedef struct {
-    const uint8_t *data;               // 原始数据包内容
-    size_t length;                     // 数据包长度
-    char src_ip[INET_ADDRSTRLEN];      // 源IP地址 (解析后)
-    char dst_ip[INET_ADDRSTRLEN];      // 目的IP地址 (解析后)
-    int total_size;                    // 流量总大小 (字节)
-    int is_parsed;                     // 是否已经解析
-    int protocol;                      // IP协议类型 (TCP/UDP等)
+    const uint8_t *data;     // 原始数据包内容
+    size_t length;           // 数据包长度
+} RawPacketData;
+
+/**
+ * @brief 数据包解析状态结构，负责跟踪解析进度
+ */
+typedef struct {
+    union {
+        uint8_t flags;                 // 所有标志位
+        struct {
+            uint8_t is_parsed : 1;     // 是否已经完全解析
+            uint8_t eth_layer_parsed : 1; // 以太网层是否已解析
+            uint8_t ip_layer_parsed : 1;  // IP层是否已解析
+            uint8_t tcp_layer_parsed : 1; // TCP层是否已解析
+            uint8_t udp_layer_parsed : 1; // UDP层是否已解析
+            uint8_t reserved : 3;      // 保留位
+        } bits;
+    } status;
+} PacketParseStatus;
+
+/**
+ * @brief 协议头部指针结构，负责存储各层协议的头部指针
+ */
+typedef struct {
     const MyEthHeader *eth_header;     // 以太网头部指针
     const MyIpHeader *ip_header;       // IP头部指针
     const MyTcpHeader *tcp_header;     // TCP头部指针（如果是TCP）
     const MyUdpHeader *udp_header;     // UDP头部指针（如果是UDP）
-} PacketInfo;
+} ProtocolHeaders;
 
 /**
- * @brief 创建一个数据包信息结构体，并复制数据内容
+ * @brief 网络信息结构，负责存储解析后的网络信息
+ */
+typedef struct {
+    char src_ip[INET_ADDRSTRLEN];      // 源IP地址 (解析后)
+    char dst_ip[INET_ADDRSTRLEN];      // 目的IP地址 (解析后)
+    int total_size;                    // 流量总大小 (字节)
+    int protocol;                      // IP协议类型 (TCP/UDP等)
+} NetworkInfo;
+
+/**
+ * @brief 数据包上下文结构，整合所有组件
+ */
+typedef struct {
+    RawPacketData raw_data;              // 原始数据包数据
+    PacketParseStatus parse_status;      // 解析状态
+    ProtocolHeaders protocol_headers;    // 协议头部指针
+    NetworkInfo network_info;            // 网络信息
+} PacketContext;
+
+/**
+ * @brief 创建一个数据包上下文结构体，并复制数据内容
  * @param data   指向原始数据包内容的指针
  * @param length 数据包内容的长度（字节数）
- * @return PacketInfo* 指向新分配并初始化的 PacketInfo 结构体指针，需用 free_packet_info 释放
- * @note 初始化后的结构体中is_parsed为0，表示尚未解析
+ * @return 返回新分配并初始化的 PacketContext 结构体指针，需用 free_packet_context 释放
  */
-PacketInfo* create_packet_info(const uint8_t *data, size_t length);
+PacketContext* create_packet_context(const uint8_t *data, size_t length);
 
 /**
- * @brief 释放由 create_packet_info 创建的数据包信息结构体及其内部数据。
- * @param info 需要释放的 PacketInfo 结构体指针
+ * @brief 释放由 create_packet_context 创建的数据包上下文结构体及其内部数据
+ * @param context 需要释放的 PacketContext 结构体指针
  */
-void free_packet_info(PacketInfo *info);
+void free_packet_context(PacketContext *context);
 
 /**
  * @brief 以太网帧解码器
- * @param info 数据包信息
- * @return int 成功返回1，失败返回0
+ * @param context 数据包上下文
+ * @return int 成功返回0，失败返回-1
+ * @note 成功时会设置 eth_header 指针并更新状态标志位
  */
-int decode_ethernet(PacketInfo *info);
+int decode_ethernet(PacketContext *context);
 
 /**
  * @brief IP包解码器
- * @param info 数据包信息
- * @return int 成功返回1，失败返回0
+ * @param context 数据包上下文
+ * @return int 成功返回0，失败返回-1
+ * @note 成功时会设置 ip_header 指针、网络信息，并更新状态标志位
  */
-int decode_ip(PacketInfo *info);
+int decode_ip(PacketContext *context);
 
 /**
  * @brief TCP段解码器
- * @param info 数据包信息
- * @return int 成功返回1，失败返回0
+ * @param context 数据包上下文
+ * @return int 成功返回0，失败返回-1
+ * @note 成功时会设置 tcp_header 指针并更新状态标志位
  */
-int decode_tcp(PacketInfo *info);
+int decode_tcp(PacketContext *context);
 
 /**
  * @brief UDP段解码器
- * @param info 数据包信息
- * @return int 成功返回1，失败返回0
+ * @param context 数据包上下文
+ * @return int 成功返回0，失败返回-1
+ * @note 成功时会设置 udp_header 指针并更新状态标志位
  */
-int decode_udp(PacketInfo *info);
-
-/**
- * @brief 解析数据包，提取源IP、目的IP和数据包大小
- * @param info 指向待解析的数据包信息结构体
- * @return int 成功返回1，失败返回0
- * @note 解析结果直接存储在info结构体中，成功解析后is_parsed设为1
- */
-int parse_packet(PacketInfo *info);
+int decode_udp(PacketContext *context);
 
 /**
  * @brief 获取本机IP地址
  * @param local_ip 存储本机IP的缓冲区
  * @param size 缓冲区大小，应至少为INET_ADDRSTRLEN
- * @return int 成功返回1，失败返回0
+ * @return int 成功返回0，失败返回-1
  * @note 此函数会尝试获取第一个非回环(非127.0.0.1)的IPv4地址
  */
 int get_local_ip(char *local_ip, size_t size);

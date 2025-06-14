@@ -32,7 +32,7 @@ TrafficAnalyzer* init_traffic_analyzer() {
 int statistic_packet(TrafficAnalyzer *analyzer, const char *src_ip, const char *dst_ip, const char *local_ip, int size) {
     if (!analyzer || !src_ip || !dst_ip || !local_ip || size <= 0) {
         fprintf(stderr, "更新流量统计失败: 无效的参数\n");
-        return 0;
+        return -1;
     }
     
     char remote_ip[INET_ADDRSTRLEN];
@@ -44,7 +44,7 @@ int statistic_packet(TrafficAnalyzer *analyzer, const char *src_ip, const char *
         
         if (strlen(dst_ip) >= INET_ADDRSTRLEN) {
             fprintf(stderr, "更新流量统计失败: 目的IP过长\n");
-            return 0;
+            return -1;
         }
         
         strncpy(remote_ip, dst_ip, INET_ADDRSTRLEN - 1);
@@ -54,7 +54,7 @@ int statistic_packet(TrafficAnalyzer *analyzer, const char *src_ip, const char *
         
         if (strlen(src_ip) >= INET_ADDRSTRLEN) {
             fprintf(stderr, "更新流量统计失败: 源IP过长\n");
-            return 0;
+            return -1;
         }
         
         strncpy(remote_ip, src_ip, INET_ADDRSTRLEN - 1);
@@ -70,7 +70,7 @@ int statistic_packet(TrafficAnalyzer *analyzer, const char *src_ip, const char *
     
     if (!stat_node) {
         fprintf(stderr, "更新流量统计失败: 无法创建统计节点\n");
-        return 0;
+        return -1;
     }
     
     // 根据方向累加流量
@@ -82,7 +82,7 @@ int statistic_packet(TrafficAnalyzer *analyzer, const char *src_ip, const char *
         stat_node->stat.incoming_bytes += size;
     }
     
-    return 1; // 成功
+    return 0; // 成功
 }
 
 /**

@@ -29,8 +29,8 @@ int dummy_handler(void *req, void *ctx) {
  * 
  * 分配内存并初始化请求结构体的各个字段
  */
-packet_request_t *create_packet_request(PacketInfo *packet_info, const char *local_ip) {
-    if (!packet_info || !local_ip) {
+packet_request_t *create_packet_request(PacketContext *packet_context, const char *local_ip) {
+    if (!packet_context || !local_ip) {
         fprintf(stderr, "创建数据包请求失败: 无效的参数\n");
         return NULL;
     }
@@ -43,7 +43,7 @@ packet_request_t *create_packet_request(PacketInfo *packet_info, const char *loc
     }
     
     // 初始化请求结构体字段
-    request->packet_info = packet_info;
+    request->packet_context = packet_context;
     
     // 复制本地IP地址（确保正确终止字符串）
     if (strlen(local_ip) >= INET_ADDRSTRLEN) {
@@ -82,7 +82,7 @@ void free_packet_request(packet_request_t *request) {
  */
 int eth_decode_handler(void *req, void *ctx) {
     packet_request_t *request = (packet_request_t *)req;
-    if (!request || !request->packet_info) {
+    if (!request || !request->packet_context) {
         fprintf(stderr, "以太网解码处理器: 无效的请求\n");
         return -1;
     }
@@ -91,12 +91,12 @@ int eth_decode_handler(void *req, void *ctx) {
     request->handler_type = HANDLER_TYPE_ETH_DECODE;
     
     // 解析以太网帧
-    if (!decode_ethernet(request->packet_info)) {
+    if (decode_ethernet(request->packet_context) != 0) {
         fprintf(stderr, "以太网解码处理器: 解析以太网帧失败\n");
         return -1;
     }
     
-    return 0; // 解析成功
+    return 0; // 解析成功，eth_layer_parsed已在decode_ethernet中设置
 }
 
 /**
@@ -107,13 +107,19 @@ int eth_decode_handler(void *req, void *ctx) {
 int ip_decode_handler(void *req, void *ctx) {
     packet_request_t *request = (packet_request_t *)req;
     
-    if (!request || !request->packet_info || !request->packet_info->eth_header) {
+    if (!request || !request->packet_context || !request->packet_context->protocol_headers.eth_header) {
         fprintf(stderr, "IP解码处理器: 无效的请求或未解析以太网头\n");
         return -1;
     }
     
+    // 确认以太网层已经解析
+    if (!request->packet_context->parse_status.status.bits.eth_layer_parsed) {
+        fprintf(stderr, "IP解码处理器: 以太网层尚未解析\n");
+        return -1;
+    }
+    
     // 确认以太网类型是IP
-    uint16_t ether_type = ntohs(request->packet_info->eth_header->ether_type);
+    uint16_t ether_type = ntohs(request->packet_context->protocol_headers.eth_header->ether_type);
     if (ether_type != ETH_P_IP) {
         fprintf(stderr, "IP解码处理器: 不是IP数据包，跳过\n");
         return -1; // 非IP协议，但允许其他处理器继续
@@ -122,79 +128,87 @@ int ip_decode_handler(void *req, void *ctx) {
     // 设置当前处理类型
     request->handler_type = HANDLER_TYPE_IP_DECODE;
     
-    // IP包在以太网解码器中已经解码过了，这里不需要重复解码
-    if (!request->packet_info->ip_header) {
-        fprintf(stderr, "IP解码处理器: IP头部指针为NULL\n");
+    // 解析IP数据包
+    if (decode_ip(request->packet_context) != 0) {
+        fprintf(stderr, "IP解码处理器: 解析IP数据包失败\n");
         return -1;
     }
     
-    return 0; // 处理成功
+    return 0; // 处理成功，ip_layer_parsed已在decode_ip中设置
 }
 
 /**
  * @brief TCP解码处理器 - 处理TCP段
  * 
- * 作为IP解码处理器的子处理器，负责解析TCP段（预留接口）
+ * 作为IP解码处理器的子处理器，负责解析TCP段
  */
 int tcp_decode_handler(void *req, void *ctx) {
     packet_request_t *request = (packet_request_t *)req;
     
-    if (!request || !request->packet_info || !request->packet_info->ip_header) {
+    if (!request || !request->packet_context || !request->packet_context->protocol_headers.ip_header) {
         fprintf(stderr, "TCP解码处理器: 无效的请求或未解析IP头\n");
         return -1;
     }
     
+    // 确认IP层已经解析
+    if (!request->packet_context->parse_status.status.bits.ip_layer_parsed) {
+        fprintf(stderr, "TCP解码处理器: IP层尚未解析\n");
+        return -1;
+    }
+    
     // 确认IP协议是TCP
-    if (request->packet_info->protocol != IPPROTO_TCP) {
-        // 不是错误，只是不匹配，允许兄弟处理器处理
+    if (request->packet_context->network_info.protocol != IPPROTO_TCP) {
+        // 不是TCP，允许兄弟处理器处理
         return -1; 
     }
     
     // 设置当前处理类型
     request->handler_type = HANDLER_TYPE_TCP_DECODE;
     
-    // TCP段解码已经在以太网->IP解码链中完成，这里无需重复解码
-    if (!request->packet_info->tcp_header) {
-        fprintf(stderr, "TCP解码处理器: TCP头部指针为NULL\n");
+    // 解析TCP段
+    if (decode_tcp(request->packet_context) != 0) {
+        fprintf(stderr, "TCP解码处理器: 解析TCP段失败\n");
         return -1;
     }
     
-    // 这里可以添加TCP协议特定的处理逻辑
-    // 目前只是预留接口，返回成功
-    return 0; 
+    return 0; // 处理成功，tcp_layer_parsed和is_parsed已在decode_tcp中设置
 }
 
 /**
  * @brief UDP解码处理器 - 处理UDP段
  * 
- * 作为IP解码处理器的子处理器，负责解析UDP段（预留接口）
+ * 作为IP解码处理器的子处理器，负责解析UDP段
  */
 int udp_decode_handler(void *req, void *ctx) {
     packet_request_t *request = (packet_request_t *)req;
     
-    if (!request || !request->packet_info || !request->packet_info->ip_header) {
+    if (!request || !request->packet_context || !request->packet_context->protocol_headers.ip_header) {
         fprintf(stderr, "UDP解码处理器: 无效的请求或未解析IP头\n");
         return -1;
     }
     
+    // 确认IP层已经解析
+    if (!request->packet_context->parse_status.status.bits.ip_layer_parsed) {
+        fprintf(stderr, "UDP解码处理器: IP层尚未解析\n");
+        return -1;
+    }
+    
     // 确认IP协议是UDP
-    if (request->packet_info->protocol != IPPROTO_UDP) {
-        // 不是错误，只是不匹配，允许兄弟处理器处理
+    if (request->packet_context->network_info.protocol != IPPROTO_UDP) {
+        // 不匹配，允许兄弟处理器处理
         return -1; 
     }
     
     // 设置当前处理类型
     request->handler_type = HANDLER_TYPE_UDP_DECODE;
     
-    // UDP段解码已经在以太网->IP解码链中完成，这里无需重复解码
-    if (!request->packet_info->udp_header) {
-        fprintf(stderr, "UDP解码处理器: UDP头部指针为NULL\n");
+    // 解析UDP段
+    if (decode_udp(request->packet_context) != 0) {
+        fprintf(stderr, "UDP解码处理器: 解析UDP段失败\n");
         return -1;
     }
     
-    // 这里可以添加UDP协议特定的处理逻辑
-    // 目前只是预留接口，返回成功
-    return 0;
+    return 0; // 处理成功，udp_layer_parsed和is_parsed已在decode_udp中设置
 }
 
 /**
@@ -205,7 +219,7 @@ int udp_decode_handler(void *req, void *ctx) {
 int statistics_handler(void *req, void *ctx) {
     packet_request_t *request = (packet_request_t *)req;
     
-    if (!request || !request->packet_info || !request->packet_info->ip_header) {
+    if (!request || !request->packet_context || !request->packet_context->protocol_headers.ip_header) {
         fprintf(stderr, "统计处理器: 无效的请求或未解析IP头\n");
         return -1;
     }
@@ -217,13 +231,13 @@ int statistics_handler(void *req, void *ctx) {
     pthread_mutex_lock(&analyzer_mutex);
     
     // 统计流量
-    if (!statistic_packet(
+    if (statistic_packet(
         traffic_analyzer,
-        request->packet_info->src_ip,
-        request->packet_info->dst_ip,
+        request->packet_context->network_info.src_ip,
+        request->packet_context->network_info.dst_ip,
         request->local_ip,
-        request->packet_info->total_size
-    )) {
+        request->packet_context->network_info.total_size
+    ) != 0) {
         fprintf(stderr, "统计处理器: 统计流量失败\n");
         pthread_mutex_unlock(&analyzer_mutex);
         return -1;
@@ -357,14 +371,14 @@ void destroy_packet_handlers(handler_node_t *root) {
  * 
  * 创建请求并启动责任链处理流程
  */
-int handle_packet(handler_node_t *handlers, PacketInfo *packet_info, const char *local_ip) {
-    if (!handlers || !packet_info || !local_ip) {
+int handle_packet(handler_node_t *handlers, PacketContext *packet_context, const char *local_ip) {
+    if (!handlers || !packet_context || !local_ip) {
         fprintf(stderr, "处理数据包: 无效的参数\n");
         return -1;
     }
     
     // 创建请求
-    packet_request_t *request = create_packet_request(packet_info, local_ip);
+    packet_request_t *request = create_packet_request(packet_context, local_ip);
     if (!request) {
         fprintf(stderr, "处理数据包: 创建请求失败\n");
         return -1;

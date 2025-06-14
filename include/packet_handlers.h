@@ -17,7 +17,7 @@
  * 该结构体包含了处理数据包所需的所有信息，作为责任链各处理器之间的通信媒介
  */
 typedef struct {
-    PacketInfo *packet_info;        // 数据包信息（包含原始数据和解析结果）
+    PacketContext *packet_context;  // 数据包上下文（包含原始数据和解析结果）
     char local_ip[INET_ADDRSTRLEN]; // 本地IP地址
     int handler_type;               // 当前处理类型（标识当前处理阶段）
     void *extra_data;               // 额外数据（可用于处理器间传递特定信息）
@@ -30,7 +30,7 @@ typedef struct {
  * 
  * @return 处理链的根节点，失败返回NULL
  */
-handler_node_t *init_packet_handlers();
+handler_node_t* init_packet_handlers();
 
 /**
  * @brief 销毁网络数据包处理链
@@ -46,16 +46,16 @@ void destroy_packet_handlers(handler_node_t *root);
  * 
  * 分配并初始化一个数据包请求结构体
  * 
- * @param packet_info 数据包信息，不会被复制，只存储指针
+ * @param packet_context 数据包上下文，不会被复制，只存储指针
  * @param local_ip 本地IP地址，会被复制到请求中
  * @return 成功返回请求指针，失败返回NULL
  */
-packet_request_t *create_packet_request(PacketInfo *packet_info, const char *local_ip);
+packet_request_t* create_packet_request(PacketContext *packet_context, const char *local_ip);
 
 /**
  * @brief 释放数据包请求
  * 
- * 释放请求结构体，但不释放packet_info（由调用者负责）
+ * 释放请求结构体，但不释放packet_context（由调用者负责）
  * 
  * @param request 请求指针
  */
@@ -67,11 +67,11 @@ void free_packet_request(packet_request_t *request);
  * 创建请求并启动责任链处理流程
  * 
  * @param handlers 处理器链根节点
- * @param packet_info 数据包信息
+ * @param packet_context 数据包上下文
  * @param local_ip 本地IP地址
  * @return 处理结果：0表示成功，-1表示失败
  */
-int handle_packet(handler_node_t *handlers, PacketInfo *packet_info, const char *local_ip);
+int handle_packet(handler_node_t *handlers, PacketContext *packet_context, const char *local_ip);
 
 /**
  * @brief 是否继续处理的判断函数

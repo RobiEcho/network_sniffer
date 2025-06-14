@@ -55,7 +55,7 @@ TrafficAnalyzer* init_traffic_analyzer();
  * @param dst_ip 数据包的目的IP
  * @param local_ip 本机IP
  * @param size 数据包大小(字节)
- * @return int 成功返回1，失败返回0
+ * @return int 成功返回0，失败返回-1
  */
 int statistic_packet(TrafficAnalyzer *analyzer, const char *src_ip, const char *dst_ip, const char *local_ip, int size);
 

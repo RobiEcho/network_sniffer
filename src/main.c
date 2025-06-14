@@ -66,14 +66,14 @@ void cleanup_resources() {
 
 // 数据包处理线程回调函数（使用责任链模式）
 void *packet_chain_callback(void *arg) {
-    PacketInfo *packet_info = (PacketInfo *)arg;
-    if (!packet_info) return NULL;
+    PacketContext *packet_context = (PacketContext *)arg;
+    if (!packet_context) return NULL;
     
     // 使用责任链处理数据包
-    handle_packet(packet_handler_chain, packet_info, local_ip);
+    handle_packet(packet_handler_chain, packet_context, local_ip);
     
-    // 释放数据包信息
-    free_packet_info(packet_info);
+    // 释放数据包上下文
+    free_packet_context(packet_context);
     return NULL;
 }
 
@@ -86,29 +86,29 @@ void packet_handler(u_char *user, const struct pcap_pkthdr *h, const u_char *byt
     if (!running) return;
     
     // 申请内存保存数据包，并传递给线程来处理
-    PacketInfo *packet_info = create_packet_info(bytes, h->caplen);
-    if (!packet_info) {
-        fprintf(stderr, "数据包信息记录失败\n");
+    PacketContext *packet_context = create_packet_context(bytes, h->caplen);
+    if (!packet_context) {
+        fprintf(stderr, "数据包上下文创建失败\n");
         return;
     }
     
     // 将任务添加到线程池，使用责任链模式的回调函数
-    if (thread_pool_add_task(thread_pool, packet_chain_callback, packet_info) != 0) {
+    if (thread_pool_add_task(thread_pool, packet_chain_callback, packet_context) != 0) {
         fprintf(stderr, "添加任务到线程池失败\n");
-        free_packet_info(packet_info);
+        free_packet_context(packet_context);
     }
 }
 
 // 初始化基础资源函数
 int init_resources() {
     // 获取本地IP
-    if (!get_local_ip(local_ip, INET_ADDRSTRLEN)) {
+    if (get_local_ip(local_ip, INET_ADDRSTRLEN) != 0) {
         fprintf(stderr, "获取本地IP失败\n");
         return 1;
     }
 
     // 初始化流量统计器
-    traffic_analyzer = init_packet_analyzer();
+    traffic_analyzer = init_traffic_analyzer();
     if (traffic_analyzer == NULL) {
         fprintf(stderr, "初始化流量统计器失败\n");
         return 1;
