@@ -37,6 +37,15 @@ typedef struct {
 } TrafficAnalyzer;
 
 /**
+ * @brief 初始化流量统计器
+ * 
+ * 分配并初始化一个新的流量统计器
+ * 
+ * @return TrafficAnalyzer* 返回流量统计器指针，失败返回NULL
+ */
+TrafficAnalyzer* init_traffic_analyzer();
+
+/**
  * @brief 更新流量统计
  * 
  * 根据数据包的源IP和目的IP更新流量统计
@@ -51,13 +60,13 @@ typedef struct {
 int statistic_packet(TrafficAnalyzer *analyzer, const char *src_ip, const char *dst_ip, const char *local_ip, int size);
 
 /**
- * @brief 初始化流量统计器
+ * @brief 释放流量统计器及其所有记录
  * 
- * 分配并初始化一个新的流量统计器
+ * 递归释放所有流量统计节点和流量统计器本身
  * 
- * @return TrafficAnalyzer* 返回流量统计器指针，失败返回NULL
+ * @param analyzer 流量统计器
  */
-TrafficAnalyzer* init_traffic_analyzer();
+void free_traffic_analyzer(TrafficAnalyzer *analyzer);
 
 /**
  * @brief 将流量统计结果写入文件
@@ -68,15 +77,6 @@ TrafficAnalyzer* init_traffic_analyzer();
  * @return int 成功写入的记录数量，失败返回0
  */
 int write_traffic_stats_to_file(TrafficAnalyzer *analyzer);
-
-/**
- * @brief 释放流量统计器及其所有记录
- * 
- * 递归释放所有流量统计节点和流量统计器本身
- * 
- * @param analyzer 流量统计器
- */
-void free_traffic_analyzer(TrafficAnalyzer *analyzer);
 
 /**
  * @brief 查找或创建流量统计节点
@@ -93,12 +93,11 @@ TrafficStatNode* find_or_create_stat_node(TrafficAnalyzer *analyzer, const char 
 /**
  * @brief 初始化流量分析器
  * 
- * 创建并初始化流量分析器（用于main.c）
+ * 创建并初始化流量分析器
  * 
- * @param analyzer 流量分析器指针的地址
- * @return int 成功返回0，失败返回-1
+ * @return TrafficAnalyzer* 成功返回流量分析器指针，失败返回NULL
  */
-int init_packet_analyzer(TrafficAnalyzer **analyzer);
+TrafficAnalyzer* init_packet_analyzer();
 
 /**
  * @brief 生成日志并释放资源

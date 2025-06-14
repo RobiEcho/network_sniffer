@@ -258,21 +258,16 @@ void free_traffic_analyzer(TrafficAnalyzer *analyzer) {
 /**
  * @brief 初始化流量分析器
  * 
- * 创建并初始化流量分析器（用于main.c）
+ * 创建并初始化流量分析器
  */
-int init_packet_analyzer(TrafficAnalyzer **analyzer) {
+TrafficAnalyzer* init_packet_analyzer() {
+    TrafficAnalyzer *analyzer = init_traffic_analyzer();
     if (!analyzer) {
-        fprintf(stderr, "初始化流量分析器失败: 无效的参数\n");
-        return -1;
-    }
-
-    *analyzer = init_traffic_analyzer();
-    if (!*analyzer) {
         fprintf(stderr, "初始化流量分析器失败: 创建流量统计器失败\n");
-        return -1;
+        return NULL;
     }
 
-    return 0;
+    return analyzer;
 }
 
 /**

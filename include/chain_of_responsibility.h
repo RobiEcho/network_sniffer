@@ -23,11 +23,6 @@ typedef int (*handler_function)(void *request, void *context);
  * - 每个节点有两个指针：first_child和next_sibling
  * - first_child指向第一个子节点
  * - next_sibling指向同级的下一个兄弟节点
- * 
- * 处理顺序：
- * 1. 当前节点
- * 2. 所有子节点（深度优先）
- * 3. 兄弟节点
  */
 typedef struct handler_node {
     char *name;                        // 处理器名称

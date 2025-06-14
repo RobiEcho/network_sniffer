@@ -137,11 +137,11 @@ int decode_ip(PacketInfo *info) {
     // 根据IP协议类型进行后续处理
     switch (info->protocol) {
         case IPPROTO_TCP:
-            // 预留TCP解码器接口
+            // TCP解码器
             return decode_tcp(info);
             
         case IPPROTO_UDP:
-            // 预留UDP解码器接口
+            // UDP解码器
             return decode_udp(info);
             
         case IPPROTO_ICMP:

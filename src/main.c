@@ -108,7 +108,8 @@ int init_resources() {
     }
 
     // 初始化流量统计器
-    if (init_packet_analyzer(&traffic_analyzer) != 0) {
+    traffic_analyzer = init_packet_analyzer();
+    if (traffic_analyzer == NULL) {
         fprintf(stderr, "初始化流量统计器失败\n");
         return 1;
     }
@@ -126,7 +127,7 @@ int init_resources() {
         return 1;
     }
     
-    // 创建线程池，使用CPU核心数作为线程数
+    // 设置线程数为CPU核心数
     int thread_count = 4; // 默认值
     #ifdef _SC_NPROCESSORS_ONLN
         int cpu_cores = sysconf(_SC_NPROCESSORS_ONLN);
@@ -180,6 +181,7 @@ int init_packet_capture() {
         return 1;
     }
     
+    // 释放网卡设备和过滤器
     pcap_freecode(&fp);
     pcap_freealldevs(devs);
     
@@ -205,9 +207,10 @@ int main() {
 
     // 开始抓包
     printf("开始抓包...(按Ctrl+C停止)\n");
-    int packet_count = 0;
+    int packet_count = 0; // 抓包计数器
     pcap_loop(handle, 0, packet_handler, (char *)&packet_count);
     printf("\n抓包结束，抓取到 %d 个数据包\n", packet_count);
     
+    // return前会调用cleanup_resources函数，释放资源
     return 0;
 }

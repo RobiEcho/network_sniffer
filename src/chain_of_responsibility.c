@@ -112,11 +112,6 @@ int process_request(handler_node_t *handler, void *request, bool (*should_contin
     // 如果有子节点，递归处理子节点（深度优先）
     if (handler->first_child) {
         result = process_request(handler->first_child, request, should_continue);
-        
-        // 检查子节点处理后是否应该继续处理
-        if (should_continue && !should_continue(result)) {
-            return result;
-        }
     }
     
     // 如果有兄弟节点，递归处理兄弟节点（这里不选择广度优先）
