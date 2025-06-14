@@ -7,6 +7,28 @@
 #include <errno.h>
 
 /**
+ * @brief 计算IP对的哈希值
+ * 
+ * 使用简单的哈希算法计算IP对的哈希值
+ */
+unsigned int hash_ip_pair(const char *local_ip, const char *remote_ip) {
+    unsigned int hash = 0;
+    const char *ptr;
+    
+    // 对本地IP进行哈希
+    for (ptr = local_ip; *ptr != '\0'; ptr++) {
+        hash = (hash * 31) + (unsigned char)*ptr;
+    }
+    
+    // 对远程IP进行哈希
+    for (ptr = remote_ip; *ptr != '\0'; ptr++) {
+        hash = (hash * 31) + (unsigned char)*ptr;
+    }
+    
+    return hash % HASH_TABLE_SIZE;
+}
+
+/**
  * @brief 初始化流量分析器
  * 
  * 分配内存并初始化流量分析器结构体
@@ -18,7 +40,10 @@ TrafficAnalyzer* init_traffic_analyzer() {
         return NULL;
     }
 
-    analyzer->head = NULL;
+    // 初始化哈希桶
+    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
+        analyzer->buckets[i] = NULL;
+    }
     analyzer->count = 0;
 
     return analyzer;
@@ -88,7 +113,7 @@ int statistic_packet(TrafficAnalyzer *analyzer, const char *src_ip, const char *
 /**
  * @brief 查找或创建流量统计节点
  * 
- * 在流量统计器中查找特定IP对的节点，如果不存在则创建
+ * 在流量统计器的哈希表中查找特定IP对的节点，如果不存在则创建
  */
 TrafficStatNode* find_or_create_stat_node(TrafficAnalyzer *analyzer, const char *local_ip, const char *remote_ip) {
     if (!analyzer || !local_ip || !remote_ip) {
@@ -96,8 +121,11 @@ TrafficStatNode* find_or_create_stat_node(TrafficAnalyzer *analyzer, const char 
         return NULL;
     }
     
-    // 先查找是否已存在该IP对的统计节点
-    TrafficStatNode *current = analyzer->head;
+    // 计算哈希值
+    unsigned int hash = hash_ip_pair(local_ip, remote_ip);
+    
+    // 在对应的哈希桶中查找
+    TrafficStatNode *current = analyzer->buckets[hash];
     while (current) {
         if (strcmp(current->stat.local_ip, local_ip) == 0 &&
             strcmp(current->stat.remote_ip, remote_ip) == 0) {
@@ -129,9 +157,9 @@ TrafficStatNode* find_or_create_stat_node(TrafficAnalyzer *analyzer, const char 
     node->stat.outgoing_bytes = 0;
     node->stat.incoming_bytes = 0;
 
-    // 添加到链表头部
-    node->next = analyzer->head;
-    analyzer->head = node;
+    // 添加到哈希桶的链表头部
+    node->next = analyzer->buckets[hash];
+    analyzer->buckets[hash] = node;
     analyzer->count++;
 
     return node;
@@ -199,25 +227,29 @@ int write_traffic_stats_to_file(TrafficAnalyzer *analyzer) {
     fprintf(file, "+-------------------+------------------+------------------+-----------------+------------------+\n");
 
     int count = 0;
-    TrafficStatNode *current = analyzer->head;
     unsigned long total_outgoing = 0;
     unsigned long total_incoming = 0;
 
-    // 写入每条统计记录
-    while (current) {
-        fprintf(file, "| %-17s | %-16s | %12lu字节 | %12lu字节 | %12lu字节 |\n",
-                current->stat.local_ip,
-                current->stat.remote_ip,
-                current->stat.outgoing_bytes,
-                current->stat.incoming_bytes,
-                current->stat.outgoing_bytes + current->stat.incoming_bytes);
+    // 遍历所有哈希桶
+    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
+        TrafficStatNode *current = analyzer->buckets[i];
+        
+        // 写入每个桶中的所有记录
+        while (current) {
+            fprintf(file, "| %-17s | %-16s | %12lu字节 | %12lu字节 | %12lu字节 |\n",
+                    current->stat.local_ip,
+                    current->stat.remote_ip,
+                    current->stat.outgoing_bytes,
+                    current->stat.incoming_bytes,
+                    current->stat.outgoing_bytes + current->stat.incoming_bytes);
 
-        fprintf(file, "+-------------------+------------------+------------------+-----------------+------------------+\n");
+            fprintf(file, "+-------------------+------------------+------------------+-----------------+------------------+\n");
 
-        total_outgoing += current->stat.outgoing_bytes;
-        total_incoming += current->stat.incoming_bytes;
-        current = current->next;
-        count++;
+            total_outgoing += current->stat.outgoing_bytes;
+            total_incoming += current->stat.incoming_bytes;
+            current = current->next;
+            count++;
+        }
     }
 
     // 写入总计
@@ -236,19 +268,22 @@ int write_traffic_stats_to_file(TrafficAnalyzer *analyzer) {
 /**
  * @brief 释放流量分析器及其所有记录
  * 
- * 递归释放所有流量统计节点和流量统计器本身
+ * 遍历所有哈希桶释放节点和流量统计器本身
  */
 void free_traffic_analyzer(TrafficAnalyzer *analyzer) {
     if (!analyzer) return;
     
-    // 释放所有节点
-    TrafficStatNode *current = analyzer->head;
-    TrafficStatNode *next;
+    // 遍历所有哈希桶
+    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
+        // 释放当前桶中的所有节点
+        TrafficStatNode *current = analyzer->buckets[i];
+        TrafficStatNode *next;
 
-    while (current) {
-        next = current->next;
-        free(current);
-        current = next;
+        while (current) {
+            next = current->next;
+            free(current);
+            current = next;
+        }
     }
 
     // 释放分析器

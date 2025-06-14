@@ -19,21 +19,26 @@ typedef struct {
 /**
  * @brief 流量统计节点
  * 
- * 链表节点，用于组织多个流量统计记录
+ * 哈希表中的节点，用于处理哈希冲突
  */
 typedef struct TrafficStatNode {
     TrafficStat stat;                  // 流量统计数据
-    struct TrafficStatNode *next;      // 下一个节点
+    struct TrafficStatNode *next;      // 冲突链表的下一个节点
 } TrafficStatNode;
+
+/**
+ * @brief 哈希表大小
+ */
+#define HASH_TABLE_SIZE 1024
 
 /**
  * @brief 流量统计器
  * 
- * 管理所有流量统计记录的主结构
+ * 使用哈希表管理所有流量统计记录的主结构
  */
 typedef struct {
-    TrafficStatNode *head;  // 头指针
-    int count;              // 记录数量
+    TrafficStatNode *buckets[HASH_TABLE_SIZE];  // 哈希桶
+    int count;                                  // 记录数量
 } TrafficAnalyzer;
 
 /**
@@ -60,15 +65,6 @@ TrafficAnalyzer* init_traffic_analyzer();
 int statistic_packet(TrafficAnalyzer *analyzer, const char *src_ip, const char *dst_ip, const char *local_ip, int size);
 
 /**
- * @brief 释放流量统计器及其所有记录
- * 
- * 递归释放所有流量统计节点和流量统计器本身
- * 
- * @param analyzer 流量统计器
- */
-void free_traffic_analyzer(TrafficAnalyzer *analyzer);
-
-/**
  * @brief 将流量统计结果写入文件
  * 
  * 生成一个包含所有流量统计数据的文本文件
@@ -77,6 +73,15 @@ void free_traffic_analyzer(TrafficAnalyzer *analyzer);
  * @return int 成功写入的记录数量，失败返回0
  */
 int write_traffic_stats_to_file(TrafficAnalyzer *analyzer);
+
+/**
+ * @brief 释放流量统计器及其所有记录
+ * 
+ * 递归释放所有流量统计节点和流量统计器本身
+ * 
+ * @param analyzer 流量统计器
+ */
+void free_traffic_analyzer(TrafficAnalyzer *analyzer);
 
 /**
  * @brief 查找或创建流量统计节点
@@ -89,6 +94,17 @@ int write_traffic_stats_to_file(TrafficAnalyzer *analyzer);
  * @return TrafficStatNode* 返回找到或新创建的流量统计节点，失败返回NULL
  */
 TrafficStatNode* find_or_create_stat_node(TrafficAnalyzer *analyzer, const char *local_ip, const char *remote_ip);
+
+/**
+ * @brief 计算IP对的哈希值
+ * 
+ * 根据本地IP和远程IP计算哈希值
+ * 
+ * @param local_ip 本机IP
+ * @param remote_ip 远程IP
+ * @return unsigned int 返回哈希值
+ */
+unsigned int hash_ip_pair(const char *local_ip, const char *remote_ip);
 
 /**
  * @brief 初始化流量分析器
